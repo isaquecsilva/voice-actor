@@ -133,7 +133,6 @@ try:
 
 	p = pyaudio.PyAudio()
 	
-	# 'Fones de ouvido (Realtek(R) Aud', 'CABLE Input (VB-Audio Virtual C'
 	devices_indexes = pick_audio_devices_indexes(p, audio, parse_devices_names())
 	
 	streams = open_streams(p, audio, devices_indexes)
