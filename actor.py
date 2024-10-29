@@ -1,11 +1,9 @@
 from sys import exit, stderr
 from pydub import AudioSegment
 from pydub.playback import play
-import signal
-import pyaudio
+import os
 import pyaudio
 import threading
-import os
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -13,26 +11,50 @@ parser = argparse.ArgumentParser(
 	description='VoiceActor reproduces an mp3 soundfile and then, sends its signals to a audio device'
 )
 
-parser.add_argument('--root-audio-path', default="audios")
-parser.add_argument('--file', '-f')
+parser.add_argument('--root-audio-path', '-r', default="audios")
+parser.add_argument('--file', '-f', help='The mp3 file to be played. It must be inside the path pointed by --root-audio-path')
+parser.add_argument('--devices', '-d', help='The name of the audio devices that will receive the audio stream. They must be put in comma separate format, like: "audio device 1,audio device 2"')
+parser.add_argument('--list-devices', '-l', action='store_true', help='List the available audio devices on current machine')
 
 args = parser.parse_args()
 
 def validate_arguments(args):
-	if args.file == None:
-		raise Exception('the file to be played (with flag --file) must be provided')
+	validations = [
+		args.file  == None,
+		args.devices == None
+	]
 
-def sigint_handler(signal, frame):
-	print('interrupt')
+	for v in validations:
+		if v == True:
+			raise Exception('Invalid or missing required arguments. Please, check help command.')
+
+
+def parse_devices_names():
+	if args.devices == None:
+		raise Exception('[critical] audio devices names must not be empty')
+
+	devices = []
+
+	for device in args.devices.split(','):
+		devices.append(device.strip())
+
+	return devices
+
+def enumerate_devices():
+	p = pyaudio.PyAudio()
+
+	for index in range(p.get_device_count()):
+		dev = p.get_device_info_by_index(index)
+
+		print(f"DEVICE_NAME = {dev['name']}, DEVICE_SAMPLE_RATE = {dev['defaultSampleRate']}, DEVICE_CHANNELS = {dev['maxOutputChannels']}")
+
 	exit(0)
-
-signal.signal(signal.SIGINT, sigint_handler)
 
 def load_audio_file(filename: str):
 	audio = AudioSegment.from_mp3(filename)
 	return audio
 
-def pick_audio_devices_indexes(p, audio, *device_names):
+def pick_audio_devices_indexes(p, audio, device_names):
 	devices = []
 	devices_names = []
 
@@ -102,13 +124,17 @@ def run_streams_as_threads(audio, streams):
 		th.join()
 
 try:
+	if args.list_devices:
+		enumerate_devices()
+
 	validate_arguments(args)
 
 	audio = load_audio_file(os.path.join(args.root_audio_path, args.file))
 
 	p = pyaudio.PyAudio()
 	
-	devices_indexes = pick_audio_devices_indexes(p, audio, 'Fones de ouvido (Realtek(R) Aud', 'CABLE Input (VB-Audio Virtual C')
+	# 'Fones de ouvido (Realtek(R) Aud', 'CABLE Input (VB-Audio Virtual C'
+	devices_indexes = pick_audio_devices_indexes(p, audio, parse_devices_names())
 	
 	streams = open_streams(p, audio, devices_indexes)
 
